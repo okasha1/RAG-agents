@@ -262,6 +262,11 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid #779c70; outli
 .count-badge { display: inline-grid; min-width: 19px; height: 19px; place-items: center; padding: 0 5px; border-radius: 6px; background: #edf1eb; color: #647168; font-size: 10px; }
 .add-source-button { display: flex; height: 36px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #d8e1d5; border-radius: 7px; background: white; color: #3b5a45; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 150ms; }
 .add-source-button:hover { background: #f0f5ed; }
+.source-filters { display: grid; gap: 8px; margin-top: 12px; }
+.source-filters label { display: grid; gap: 4px; color: #737f75; font-size: 9px; font-weight: 650; }
+.source-filters input, .source-filters select { width: 100%; height: 30px; padding: 0 8px; border: 1px solid #e0e6de; border-radius: 5px; background: white; color: #46534a; font: 10px "Segoe UI", sans-serif; }
+.source-filters input:focus, .source-filters select:focus { outline: 2px solid #88a68155; border-color: #9bb496; }
+.source-filter-empty { padding: 10px 5px; color: #879188; font-size: 10px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 .drop-card { display: flex; min-height: 126px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; margin-top: 14px; padding: 14px 8px; border: 1px dashed #d7dfd5; border-radius: 8px; background: #f7f9f5; color: inherit; cursor: pointer; }
 .drop-card:hover { border-color: #9db298; background: #f1f5ef; }
@@ -328,6 +333,9 @@ button:focus-visible, textarea:focus-visible { outline: 2px solid #779c70; outli
 .message-user .message-body { max-width: min(86%, 530px); padding: 12px 15px; border: 1px solid #e4ebe0; border-radius: 10px 3px 10px 10px; background: #f5f8f2; }
 .message-label { margin-bottom: 4px; color: #7f8b80; font-size: 10px; font-weight: 650; }
 .message-body p { margin: 0; color: #3e4941; font-size: 12px; line-height: 1.65; }
+.citation-link { padding: 0 2px; border: 0; background: transparent; color: #4b7952; cursor: pointer; font: inherit; font-size: .9em; font-weight: 700; vertical-align: baseline; }
+.citation-link:hover { color: #294b31; text-decoration: underline; }
+.citation-link:focus-visible { outline: 2px solid #88a681; outline-offset: 1px; }
 .assistant-avatar { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border: 1px solid #dde8d8; border-radius: 8px; background: #eef4e9; }
 .assistant-avatar .brand-glyph { transform: scale(.7); }
 .evidence-list { display: grid; gap: 8px; margin-top: 12px; }
