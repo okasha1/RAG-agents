@@ -48,6 +48,11 @@ type Message = {
   passages?: Passage[]
 }
 
+type SavedWorkspace = {
+  sources: Source[]
+  messages: Message[]
+}
+
 type OllamaModel = {
   name?: string
   model?: string
@@ -85,6 +90,49 @@ const prompts = [
   { icon: BookOpen, label: 'Summarize these documents' },
   { icon: ArrowDownToLine, label: 'Pull out dates and deadlines' },
 ]
+
+function openWorkspaceDatabase() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('rag-agents-workspace', 1)
+    request.onupgradeneeded = () => request.result.createObjectStore('workspace')
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('Could not open saved workspace'))
+  })
+}
+
+async function loadSavedWorkspace() {
+  const database = await openWorkspaceDatabase()
+  return new Promise<SavedWorkspace | undefined>((resolve, reject) => {
+    const transaction = database.transaction('workspace', 'readonly')
+    const request = transaction.objectStore('workspace').get('current')
+    request.onsuccess = () => resolve(request.result as SavedWorkspace | undefined)
+    transaction.oncomplete = () => database.close()
+    transaction.onerror = () => {
+      database.close()
+      reject(transaction.error ?? new Error('Could not load saved workspace'))
+    }
+  })
+}
+
+async function saveWorkspace(workspace: SavedWorkspace) {
+  const database = await openWorkspaceDatabase()
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction('workspace', 'readwrite')
+    transaction.objectStore('workspace').put(workspace, 'current')
+    transaction.oncomplete = () => {
+      database.close()
+      resolve()
+    }
+    transaction.onerror = () => {
+      database.close()
+      reject(transaction.error ?? new Error('Could not save workspace'))
+    }
+    transaction.onabort = () => {
+      database.close()
+      reject(transaction.error ?? new Error('Workspace save was interrupted'))
+    }
+  })
+}
 
 function splitIntoChunks(text: string) {
   const words = text.replace(/\s+/g, ' ').trim().split(' ')
@@ -224,6 +272,7 @@ export default function RagWorkspace() {
   const [sources, setSources] = useState<Source[]>([])
   const [activeArea, setActiveArea] = useState<'chat' | 'documents' | 'email'>('chat')
   const [messages, setMessages] = useState<Message[]>([])
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const [draft, setDraft] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [isIndexing, setIsIndexing] = useState(false)
@@ -251,6 +300,31 @@ export default function RagWorkspace() {
     (sourceTypeFilter === 'all' || source.fileType === sourceTypeFilter)
     && source.name.toLowerCase().includes(sourceNameFilter.trim().toLowerCase()),
   )
+
+  useEffect(() => {
+    let active = true
+    void loadSavedWorkspace().then((saved) => {
+      if (!active) return
+      setSources(saved?.sources ?? [])
+      setMessages(saved?.messages ?? [])
+      setHistoryLoaded(true)
+    }).catch(() => {
+      if (!active) return
+      setHistoryLoaded(true)
+      setNotice('Saved history could not be loaded in this browser.')
+    })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    if (!historyLoaded) return
+    const timeout = window.setTimeout(() => {
+      void saveWorkspace({ sources, messages }).catch(() => {
+        setNotice('History could not be saved. Check this browser’s storage settings.')
+      })
+    }, 500)
+    return () => window.clearTimeout(timeout)
+  }, [historyLoaded, messages, sources])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -412,6 +486,19 @@ export default function RagWorkspace() {
         ? { ...message, text: message.text + content }
         : message))
     }
+    let queuedAnswer = ''
+    let answerFrame = 0
+    const flushAnswer = () => {
+      answerFrame = 0
+      if (!queuedAnswer) return
+      const content = queuedAnswer
+      queuedAnswer = ''
+      appendAnswer(content)
+    }
+    const queueAnswer = (content: string) => {
+      queuedAnswer += content
+      if (!answerFrame) answerFrame = window.requestAnimationFrame(flushAnswer)
+    }
 
     try {
       const response = await fetch(requestUrl, {
@@ -424,7 +511,7 @@ export default function RagWorkspace() {
         body: JSON.stringify({
           model: activeModel,
           stream: true,
-          ...(modelProvider === 'local' ? { options: { num_ctx: 4096 } } : {}),
+          ...(modelProvider === 'local' ? { keep_alive: '30m', options: { num_ctx: 4096 } } : {}),
           messages: [
             {
               role: 'system',
@@ -453,7 +540,7 @@ export default function RagWorkspace() {
           : event.choices?.[0]?.delta?.content ?? ''
         if (content) {
           answerText += content
-          appendAnswer(content)
+          queueAnswer(content)
         }
       }
 
@@ -466,8 +553,11 @@ export default function RagWorkspace() {
         if (done) break
       }
       readEvent(pending)
+      flushAnswer()
       if (!answerText) appendAnswer('The model returned an empty answer. Try asking again.')
     } catch (error) {
+      if (answerFrame) window.cancelAnimationFrame(answerFrame)
+      flushAnswer()
       if (error instanceof DOMException && error.name === 'AbortError') {
         setMessages((current) => current.map((message) => message.id === answerId && !message.text
           ? { ...message, text: 'Response stopped.' }
@@ -508,7 +598,7 @@ export default function RagWorkspace() {
       body: JSON.stringify({
         model,
         stream: false,
-        ...(modelProvider === 'local' ? { options: { num_ctx: 4096 } } : {}),
+        ...(modelProvider === 'local' ? { keep_alive: '30m', options: { num_ctx: 4096 } } : {}),
         messages: [
           {
             role: 'system',
@@ -600,7 +690,7 @@ export default function RagWorkspace() {
           </div>
         )}
 
-        <div className="sidebar-footer"><div className="privacy-indicator"><span /> Stored in this session only</div><div className="sidebar-footer-note">Files stay on this device</div></div>
+        <div className="sidebar-footer"><div className="privacy-indicator"><span /> Saved on this device</div><div className="sidebar-footer-note">History and files stay in this browser</div></div>
       </aside>}
 
       <main className={`main-panel ${activeArea === 'chat' ? '' : 'tool-panel-hidden'}`}>
